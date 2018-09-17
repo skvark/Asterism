@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=harbour.asterism
+Interface=harbour.asterism
+Exec=/bin/false
+SystemdService=dbus-harbour.asterism.service
