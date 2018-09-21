@@ -4,6 +4,7 @@
 #include <QString>
 #include <QJsonObject>
 #include <QVariantMap>
+#include <QVariantList>
 #include <QDebug>
 #include <libipfs.h>
 #include <stdlib.h>
@@ -15,7 +16,10 @@ class IPFSApi : public QObject
     Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
     Q_PROPERTY(bool isRunning READ isRunning NOTIFY runningChanged)
     Q_PROPERTY(bool isStarting READ isStarting NOTIFY startingChanged)
+    Q_PROPERTY(bool isListingFiles READ isListingFiles NOTIFY isListingFilesChanged)
     Q_PROPERTY(int repoSize READ maxRepoSize WRITE setMaxRepoSize NOTIFY repoSizeChanged)
+    Q_PROPERTY(QVariantList files READ files NOTIFY filesChanged)
+    Q_PROPERTY(QString currentPath READ currentPath NOTIFY currentPathChanged)
 public:
     explicit IPFSApi(QObject *parent = nullptr);
     ~IPFSApi();
@@ -24,7 +28,7 @@ public:
     Q_INVOKABLE void start();
     Q_INVOKABLE void stop();
 
-    void add(QString path);
+    Q_INVOKABLE void add(QString path);
     void add_bytes(QByteArray data);
 
     void cat(QString path);
@@ -45,6 +49,10 @@ public:
     Q_INVOKABLE void repostats();
     Q_INVOKABLE void repoconfig();
 
+    // files
+    Q_INVOKABLE void files_ls();
+    Q_INVOKABLE void files_mkdir(QString dir);
+
     // exposed to QML
     /*
      * RepoSize
@@ -59,20 +67,29 @@ public:
 
     bool isRunning();
     bool isStarting();
+    bool isListingFiles();
     void setMaxRepoSize(int size);
     int maxRepoSize();
+    Q_INVOKABLE void setCurrentPath(QString path);
+    QVariantList files();
+    QString currentPath();
 
     static void callback(char* error, char* data, size_t size, int method, void* instance) {
 
         IPFSApi* api = static_cast<IPFSApi*>(instance);
-        bool ok = api->checkCallback(error, size, api);
 
-        if (!ok) {
-            if (method == f_ipfs_start) {
-                api->handleStartFail();
-            }
+        if (method == -1) {
+            QString err = api->checkError(error, size);
+            qDebug() << err;
             return;
         }
+
+        if (method == f_ipfs_start && error != NULL) {
+            api->handleStartFail();
+            return;
+        }
+
+        qDebug() << method << data;
 
         switch(method) {
             case f_ipfs_start:
@@ -84,6 +101,7 @@ public:
                 break;
             case f_ipfs_add_path_or_file:
                 qDebug() << "add folder / file done";
+                api->handleAdd(data, size);
                 break;
             case f_ipfs_cat:
                 qDebug() << "cat done";
@@ -111,6 +129,18 @@ public:
                 qDebug() << "config done";
                 api->handleConfig(data, size);
                 break;
+            case f_ipfs_files_cp:
+                qDebug() << "files ls done";
+                api->handleFilesCp(data, size);
+                break;
+            case f_ipfs_files_ls:
+                qDebug() << "files ls done";
+                api->handleFilesLs(data, size);
+                break;
+            case f_ipfs_files_mkdir:
+                qDebug() << "files mkdir done";
+                api->handleFilesMkdir(data, size);
+                break;
             default:
                 break;
         }
@@ -124,38 +154,38 @@ signals:
     void runningChanged();
     void startingChanged();
     void repoSizeChanged();
+    void filesChanged();
+    void isListingFilesChanged();
+    void currentPathChanged();
 
 private:
     char *QStringToChar(QString str);
 
     void handleStats(char* data, size_t size);
     void handleConfig(char* data, size_t size);
+    void handleFilesLs(char* data, size_t size);
+    void handleFilesMkdir(char* data, size_t size);
+    void handleAdd(char* data, size_t size);
+    void handleFilesCp(char* data, size_t size);
     void handleStart();
     void handleStartFail();
 
     bool running_;
     bool starting_;
+    bool listingFiles_;
     int maxRepoSize_;
     QString repoPath_;
     QVariantMap stats_;
     QVariantMap config_;
-
-    static bool checkCallback(char* error, size_t size, IPFSApi* api) {
-        QString e = checkError(error, size);
-        if (!e.isEmpty()) {
-            qDebug() << e;
-            emit api->ipfsError(e);
-            return false;
-        }
-        return true;
-    }
+    QString currentPath_;
+    QMap<QString, QVariantList> fileMap_;
 
     static QString checkError(char* error, size_t size) {
         QString err;
-        if (err == NULL) {
+        if (error == NULL) {
             err = QString("");
         } else {
-            err = QString::fromLatin1(error, size);
+            err = QString::fromUtf8(error, size);
         }
         return err;
     }

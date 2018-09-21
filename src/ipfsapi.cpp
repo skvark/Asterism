@@ -1,5 +1,6 @@
 #include "ipfsapi.h"
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QTimer>
 #include <QStandardPaths>
 #include <QDir>
@@ -12,7 +13,10 @@ IPFSApi::IPFSApi(QObject *parent) :
     repoPath_ = repoRoot;
     running_ = false;
     starting_ = false;
+    listingFiles_ = false;
     maxRepoSize_ = 256;
+    currentPath_ = "/";
+    fileMap_.insert("/", QVariantList());
 
     register_callback_class_instance(this);
 
@@ -116,6 +120,25 @@ void IPFSApi::repoconfig()
     ipfs_config((void*)&IPFSApi::callback);
 }
 
+void IPFSApi::files_ls()
+{
+    if (!running_) {
+        return;
+    }
+
+    listingFiles_ = true;
+    qDebug() << QString("IPFS files ls");
+    char* cpath = QStringToChar(currentPath_);
+    ipfs_files_ls(cpath, (void*)&IPFSApi::callback);
+}
+
+void IPFSApi::files_mkdir(QString dir)
+{
+    qDebug() << QString("IPFS files mkdir");
+    char* cdir = QStringToChar(currentPath_ + dir);
+    ipfs_files_mkdir(cdir, 1, (void*)&IPFSApi::callback);
+}
+
 QVariantMap IPFSApi::stats()
 {
     return stats_;
@@ -136,6 +159,11 @@ bool IPFSApi::isStarting()
     return starting_;
 }
 
+bool IPFSApi::isListingFiles()
+{
+    return listingFiles_;
+}
+
 void IPFSApi::setMaxRepoSize(int size)
 {
     maxRepoSize_ = size;
@@ -146,9 +174,42 @@ int IPFSApi::maxRepoSize()
     return maxRepoSize_;
 }
 
+void IPFSApi::setCurrentPath(QString path)
+{
+    if (path == "/") {
+        currentPath_ = "/";
+    } else if (path == "..") {
+        QList<QString> parts = currentPath_.split("/");
+        parts.removeLast();
+        parts.removeLast();
+        currentPath_ = parts.join("/");
+        if(currentPath_ != "/") {
+            currentPath_.prepend('/');
+        }
+    } else {
+        currentPath_ = currentPath_ + path + "/";
+    }
+
+    if (!fileMap_.contains(path)) {
+        fileMap_.insert(path, QVariantList());
+    }
+    files_ls();
+    emit currentPathChanged();
+}
+
+QVariantList IPFSApi::files()
+{
+    return fileMap_[currentPath_];
+}
+
+QString IPFSApi::currentPath()
+{
+    return currentPath_;
+}
+
 char *IPFSApi::QStringToChar(QString str)
 {
-    QByteArray ba = str.toLatin1();
+    QByteArray ba = str.toUtf8();
     return ba.data();
 }
 
@@ -197,4 +258,35 @@ void IPFSApi::handleStartFail()
     starting_ = false;
     emit startingChanged();
     emit runningChanged();
+}
+
+void IPFSApi::handleFilesLs(char* data, size_t size)
+{
+    QByteArray ba = QByteArray::fromRawData(data, size);
+    QJsonParseError e;
+    QJsonDocument files = QJsonDocument::fromJson(ba, &e);
+    QJsonArray farr = files.array();
+    fileMap_[currentPath_] = farr.toVariantList();
+    qDebug() << fileMap_[currentPath_];
+    listingFiles_ = false;
+    emit isListingFilesChanged();
+    emit filesChanged();
+}
+
+void IPFSApi::handleFilesMkdir(char *data, size_t size)
+{
+    files_ls();
+}
+
+void IPFSApi::handleAdd(char *data, size_t size)
+{
+    char* curDir = QStringToChar(currentPath_);
+    QString hash = QString::fromUtf8(data, size);
+    char* ipfsPath = QStringToChar("/ipfs/" + hash);
+    ipfs_files_cp(ipfsPath, curDir, (void*)&IPFSApi::callback);
+}
+
+void IPFSApi::handleFilesCp(char *data, size_t size)
+{
+    files_ls();
 }

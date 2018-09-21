@@ -11,6 +11,7 @@ Page {
 
         PullDownMenu {
             width: parent.width
+            visible: viewContainer.currentIndex === 0
 
             MenuItem {
                 text: "About"
@@ -45,6 +46,10 @@ Page {
 
             onCurrentIndexChanged: {
                 navigation.selected = currentIndex
+                if (currentIndex === 1) {
+                    ipfsapi.setCurrentPath("/");
+                    ipfsapi.files_ls()
+                }
             }
         }
     }
