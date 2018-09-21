@@ -12,7 +12,6 @@
 # The name of your application
 TARGET = harbour-asterism
 
-QT += dbus
 CONFIG += sailfishapp
 
 INCLUDEPATH += src/
@@ -22,11 +21,9 @@ LIBS += -lipfs
 
 SOURCES += \
     src/harbour-asterism.cpp \
-    src/service.cpp \
     src/ipfsapi.cpp
 
 HEADERS += \
-    src/service.h \
     src/ipfsapi.h
 
 DISTFILES += \
@@ -34,20 +31,17 @@ DISTFILES += \
     qml/cover/CoverPage.qml \
     harbour-asterism.desktop \
     qml/pages/MainPage.qml \
-    qml/pages/WarningDialog.qml
+    qml/pages/WarningDialog.qml \
+    qml/pages/InfoView.qml \
+    qml/pages/TabPanel.qml \
+    qml/pages/Indicator.qml \
+    qml/pages/FilesView.qml \
+    qml/pages/PeersView.qml
 
 OTHER_FILES += \
     rpm/harbour-asterism.spec
 
 SAILFISHAPP_ICONS = 86x86 108x108 128x128 172x172
-
-systemd.files = systemd/dbus-harbour.asterism.service
-systemd.path = /usr/lib/systemd/user
-INSTALLS += systemd
-
-dbus.files = dbus/harbour.asterism.service
-dbus.path = /usr/share/dbus-1/services
-INSTALLS += dbus
 
 # to disable building translations every time, comment out the
 # following CONFIG line

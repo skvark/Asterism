@@ -1,7 +1,0 @@
-[Unit]
-Description=harbour-asterism dbus service
-
-[Service]
-Type=dbus
-ExecStart=/usr/bin/invoker -s --type=silica-qt5 /usr/bin/harbour-asterism activate
-BusName=harbour.asterism

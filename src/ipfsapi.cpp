@@ -1,24 +1,39 @@
 #include "ipfsapi.h"
 #include <QJsonDocument>
+#include <QTimer>
+#include <QStandardPaths>
+#include <QDir>
 
 IPFSApi::IPFSApi(QObject *parent) :
     QObject(parent)
 {
-}
+    QString repoRoot = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/ipfs";
 
-IPFSApi::IPFSApi(QString repoPath)
-{
-    repoPath_ = repoPath;
+    repoPath_ = repoRoot;
     running_ = false;
     starting_ = false;
+    maxRepoSize_ = 256;
+
     register_callback_class_instance(this);
+
+    QDir dir(repoRoot);
+    if (!dir.exists()) {
+        dir.mkpath(".");
+        QTimer::singleShot(50, this, SIGNAL(firstUse()));
+    }
+}
+
+IPFSApi::~IPFSApi() {
+    if (running_) {
+        stop();
+    }
 }
 
 void IPFSApi::start()
 {
     starting_ = true;
     emit startingChanged();
-    char* size = QStringToChar(QString("500MB"));
+    char* size = QStringToChar(QString::number(maxRepoSize_) + QString("MB"));
     ipfs_start(QStringToChar(repoPath_), size, (void*)&IPFSApi::callback);
 }
 
@@ -121,6 +136,16 @@ bool IPFSApi::isStarting()
     return starting_;
 }
 
+void IPFSApi::setMaxRepoSize(int size)
+{
+    maxRepoSize_ = size;
+}
+
+int IPFSApi::maxRepoSize()
+{
+    return maxRepoSize_;
+}
+
 char *IPFSApi::QStringToChar(QString str)
 {
     QByteArray ba = str.toLatin1();
@@ -132,9 +157,17 @@ void IPFSApi::handleStats(char *data, size_t size)
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument stats = QJsonDocument::fromJson(ba, &e);
-    qDebug() << e.errorString();
     QJsonObject s = stats.object();
     stats_ = s.toVariantMap();
+
+    QString repoMax = stats_.value("StorageMax").toString().replace("MB", "");
+
+    bool ok;
+    int intSize = repoMax.toInt(&ok);
+    if(ok) {
+        maxRepoSize_ = intSize;
+    }
+
     emit statsChanged();
 }
 
@@ -143,7 +176,6 @@ void IPFSApi::handleConfig(char *data, size_t size)
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument config = QJsonDocument::fromJson(ba, &e);
-    qDebug() << e.errorString();
     QJsonObject s = config.object();
     config_ = s.toVariantMap();
     emit configChanged();

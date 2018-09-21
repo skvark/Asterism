@@ -26,18 +26,32 @@ Dialog {
             font.pixelSize: Theme.fontSizeExtraSmall
             color: Theme.primaryColor
             textFormat: Text.RichText;
-            text: "This is experimental InterPlanetary File System application. " +
-                  "Please read the notes below carefully." +
+            text: "<style>a:link { color: " + Theme.highlightColor + "; }</style>" +
+                  "This experimental <a href='https://ipfs.io/'>InterPlanetary File System</a> application " +
+                  "brings decentralized web to your Sailfish OS device. Please read the notes below carefully." +
                   "<br /><br />" +
-                  "This application will spin up a full IPFS peer-to-peer node on your Sailfish OS device. " +
-                  "The application does not fully exit unless you select 'Exit App' from the pulley menu. " +
-                  "If you closed the app by some other means (like by swiping from top to down) the node will stay running in the background " +
-                  "even if you don't see the app in the multitasking view." +
+                  "This application will make your device a fully working IPFS peer-to-peer node. " +
+                  "IPFS is currently in alpha state which means there might be unexpected bugs in this application." +
                   "<br /><br />" +
-                  "IPFS itself is in alpha state. There is no bandwidth limiting and thus the app may consume huge amounts of bandwidth. " +
-                  "Additionally, all files you add to the IPFS are public: please don't add any personal data or secrets to the IPFS." +
+                  "The app may consume huge amounts of bandwidth if left running in the background. This has also negative effect on battery life. " +
+                  "To decrease the network usage, turn 'DHT Client Only' mode on from settings. " +
                   "<br /><br />" +
-                  "To avoid consuming all disk space from your device, please select below the amount of storage you allow IPFS to use."
+                  "All files you add to the network are public. Don't add any personal data or secrets to the IPFS." +
+                  "<br /><br />" +
+                  "Please select below the amount of storage you allow IPFS to use. You can change this later in the settings."
+        }
+
+        Slider {
+            width: parent.width
+            label: "Storage max. size in MB"
+            minimumValue: 24
+            maximumValue: 1024
+            value: ipfsapi.repoSize
+            valueText: value + " MB"
+            stepSize: 8
+            onValueChanged: {
+                ipfsapi.repoSize = value
+            }
         }
     }
 }

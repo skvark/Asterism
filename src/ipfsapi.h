@@ -15,9 +15,10 @@ class IPFSApi : public QObject
     Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
     Q_PROPERTY(bool isRunning READ isRunning NOTIFY runningChanged)
     Q_PROPERTY(bool isStarting READ isStarting NOTIFY startingChanged)
+    Q_PROPERTY(int repoSize READ maxRepoSize WRITE setMaxRepoSize NOTIFY repoSizeChanged)
 public:
     explicit IPFSApi(QObject *parent = nullptr);
-    IPFSApi(QString repoPath);
+    ~IPFSApi();
 
     // basic commands
     Q_INVOKABLE void start();
@@ -43,6 +44,23 @@ public:
 
     Q_INVOKABLE void repostats();
     Q_INVOKABLE void repoconfig();
+
+    // exposed to QML
+    /*
+     * RepoSize
+     * StorageMax
+     * NumObjects
+     * RepoPath
+     * Version
+    */
+    QVariantMap stats();
+
+    QVariantMap config();
+
+    bool isRunning();
+    bool isStarting();
+    void setMaxRepoSize(int size);
+    int maxRepoSize();
 
     static void callback(char* error, char* data, size_t size, int method, void* instance) {
 
@@ -98,26 +116,14 @@ public:
         }
     }
 
-    // exposed to QML
-    /*
-     * RepoSize
-     * StorageMax
-     * NumObjects
-     * RepoPath
-     * Version
-    */
-    QVariantMap stats();
-
-    QVariantMap config();
-    bool isRunning();
-    bool isStarting();
-
 signals:
+    void firstUse();
     void ipfsError(QString error);
     void statsChanged();
     void configChanged();
     void runningChanged();
     void startingChanged();
+    void repoSizeChanged();
 
 private:
     char *QStringToChar(QString str);
@@ -129,6 +135,7 @@ private:
 
     bool running_;
     bool starting_;
+    int maxRepoSize_;
     QString repoPath_;
     QVariantMap stats_;
     QVariantMap config_;
