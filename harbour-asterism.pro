@@ -15,7 +15,7 @@ TARGET = harbour-asterism
 CONFIG += sailfishapp
 
 INCLUDEPATH += src/
-INCLUDEPATH += C:\SailfishOS\mersdk\targets\SailfishOS-2.2.0.29-i486\usr\include\
+INCLUDEPATH += C:\SailfishOS\mersdk\targets\SailfishOS-2.2.0.29-armv7hl\usr\include\
 
 LIBS += -lipfs
 
@@ -37,7 +37,8 @@ DISTFILES += \
     qml/pages/Indicator.qml \
     qml/pages/FilesView.qml \
     qml/pages/PeersView.qml \
-    qml/pages/CreateDir.qml
+    qml/pages/CreateDir.qml \
+    qml/pages/SettingsView.qml
 
 OTHER_FILES += \
     rpm/harbour-asterism.spec

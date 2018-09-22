@@ -14,8 +14,11 @@ IPFSApi::IPFSApi(QObject *parent) :
     running_ = false;
     starting_ = false;
     listingFiles_ = false;
-    maxRepoSize_ = 256;
+    maxRepoSize_ = 0;
     currentPath_ = "/";
+    addingFiles_ = false;
+    gcRunning_ = false;
+    mode_ = "";
     fileMap_.insert("/", QVariantList());
 
     register_callback_class_instance(this);
@@ -24,6 +27,8 @@ IPFSApi::IPFSApi(QObject *parent) :
     if (!dir.exists()) {
         dir.mkpath(".");
         QTimer::singleShot(50, this, SIGNAL(firstUse()));
+    } else {
+        start();
     }
 }
 
@@ -37,8 +42,23 @@ void IPFSApi::start()
 {
     starting_ = true;
     emit startingChanged();
-    char* size = QStringToChar(QString::number(maxRepoSize_) + QString("MB"));
-    ipfs_start(QStringToChar(repoPath_), size, (void*)&IPFSApi::callback);
+
+    QString size;
+    if (maxRepoSize_ == 0) {
+        size = "";
+    } else {
+        size = QString::number(maxRepoSize_) + QString("MB");
+    }
+
+    qDebug() << size;
+    qDebug() << mode_;
+    ipfs_start(QStringToChar(repoPath_), QStringToChar(size), QStringToChar(mode_), (void*)&IPFSApi::callback);
+}
+
+void IPFSApi::restart()
+{
+    stop();
+    QTimer::singleShot(200, this, SLOT(startSlot()));
 }
 
 void IPFSApi::stop()
@@ -54,15 +74,29 @@ void IPFSApi::stop()
     emit runningChanged();
 }
 
-void IPFSApi::add(QString path)
+bool IPFSApi::add(QString path)
 {
+    // multiple concurrent adds not working
+    if (addingFiles_ || !running_) {
+        return false;
+    }
+
+    addingFiles_ = true;
+    emit isAddingFilesChanged();
+
     qDebug() << QString("IPFS add: %1").arg(path);
     char* cpath = QStringToChar(path);
-    ipfs_add_path_or_file(cpath, (void*)&IPFSApi::callback);
+    ipfs_add_path_or_file(cpath, 0, (void*)&IPFSApi::callback);
+
+    return true;
 }
 
 void IPFSApi::add_bytes(QByteArray data)
 {
+    if (!running_) {
+        return;
+    }
+
     qDebug() << QString("IPFS add bytes");
     char* cdata = data.data();
     ipfs_add_bytes(cdata, 0, (void*)&IPFSApi::callback);
@@ -70,6 +104,9 @@ void IPFSApi::add_bytes(QByteArray data)
 
 void IPFSApi::cat(QString path)
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS cat: %1").arg(path);
     char* cpath = QStringToChar(path);
     ipfs_cat(cpath, (void*)&IPFSApi::callback);
@@ -77,6 +114,9 @@ void IPFSApi::cat(QString path)
 
 void IPFSApi::ls(QString path)
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS ls: %1").arg(path);
     char* cpath = QStringToChar(path);
     ipfs_ls(cpath, (void*)&IPFSApi::callback);
@@ -84,6 +124,9 @@ void IPFSApi::ls(QString path)
 
 void IPFSApi::unpin(QString cid)
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS unpin: %1").arg(cid);
     char* ccid = QStringToChar(cid);
     ipfs_unpin(ccid, (void*)&IPFSApi::callback);
@@ -91,12 +134,18 @@ void IPFSApi::unpin(QString cid)
 
 void IPFSApi::conns()
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS conns");
     ipfs_peers((void*)&IPFSApi::callback);
 }
 
 void IPFSApi::id(QString cid)
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS id: %1").arg(cid);
     char* ccid = QStringToChar(cid);
     ipfs_id(ccid, (void*)&IPFSApi::callback);
@@ -104,18 +153,31 @@ void IPFSApi::id(QString cid)
 
 void IPFSApi::gc()
 {
+    if (!running_) {
+        return;
+    }
+
+    gcRunning_ = true;
+    emit gcChanged();
+
     qDebug() << QString("IPFS garbage collect");
     ipfs_gc((void*)&IPFSApi::callback);
 }
 
 void IPFSApi::repostats()
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS repo stats");
     ipfs_repo_stats((void*)&IPFSApi::callback);
 }
 
 void IPFSApi::repoconfig()
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS config");
     ipfs_config((void*)&IPFSApi::callback);
 }
@@ -134,6 +196,9 @@ void IPFSApi::files_ls()
 
 void IPFSApi::files_mkdir(QString dir)
 {
+    if (!running_) {
+        return;
+    }
     qDebug() << QString("IPFS files mkdir");
     char* cdir = QStringToChar(currentPath_ + dir);
     ipfs_files_mkdir(cdir, 1, (void*)&IPFSApi::callback);
@@ -164,6 +229,16 @@ bool IPFSApi::isListingFiles()
     return listingFiles_;
 }
 
+bool IPFSApi::isAddingFiles()
+{
+    return addingFiles_;
+}
+
+bool IPFSApi::isGcRunning()
+{
+    return gcRunning_;
+}
+
 void IPFSApi::setMaxRepoSize(int size)
 {
     maxRepoSize_ = size;
@@ -180,11 +255,15 @@ void IPFSApi::setCurrentPath(QString path)
         currentPath_ = "/";
     } else if (path == "..") {
         QList<QString> parts = currentPath_.split("/");
+        qDebug() << parts;
         parts.removeLast();
         parts.removeLast();
         currentPath_ = parts.join("/");
-        if(currentPath_ != "/") {
-            currentPath_.prepend('/');
+        qDebug() << currentPath_;
+        if (currentPath_ == "") {
+            currentPath_ = "/";
+        } else {
+            currentPath_.append("/");
         }
     } else {
         currentPath_ = currentPath_ + path + "/";
@@ -197,6 +276,17 @@ void IPFSApi::setCurrentPath(QString path)
     emit currentPathChanged();
 }
 
+void IPFSApi::setMode(QString mode)
+{
+    mode_ = mode;
+    emit modeChanged();
+}
+
+QString IPFSApi::mode()
+{
+    return mode_;
+}
+
 QVariantList IPFSApi::files()
 {
     return fileMap_[currentPath_];
@@ -205,6 +295,16 @@ QVariantList IPFSApi::files()
 QString IPFSApi::currentPath()
 {
     return currentPath_;
+}
+
+QVariantList IPFSApi::nodeConns()
+{
+    return connList_;
+}
+
+void IPFSApi::startSlot()
+{
+    start();
 }
 
 char *IPFSApi::QStringToChar(QString str)
@@ -226,7 +326,8 @@ void IPFSApi::handleStats(char *data, size_t size)
     bool ok;
     int intSize = repoMax.toInt(&ok);
     if(ok) {
-        maxRepoSize_ = intSize;
+        maxRepoSize_ = intSize / (1000 * 1000);
+        emit repoSizeChanged();
     }
 
     emit statsChanged();
@@ -237,9 +338,25 @@ void IPFSApi::handleConfig(char *data, size_t size)
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument config = QJsonDocument::fromJson(ba, &e);
+
     QJsonObject s = config.object();
+    QJsonObject routing = s.value("Routing").toObject();
+
     config_ = s.toVariantMap();
+    mode_ = routing.value("Type").toString();
+
     emit configChanged();
+    emit modeChanged();
+}
+
+void IPFSApi::handleConns(char *data, size_t size)
+{
+    QByteArray ba = QByteArray::fromRawData(data, size);
+    QJsonParseError e;
+    QJsonDocument conns = QJsonDocument::fromJson(ba, &e);
+    QJsonArray arr = conns.array();
+    connList_ = arr.toVariantList();
+    emit connsChanged();
 }
 
 void IPFSApi::handleStart()
@@ -280,13 +397,36 @@ void IPFSApi::handleFilesMkdir(char *data, size_t size)
 
 void IPFSApi::handleAdd(char *data, size_t size)
 {
-    char* curDir = QStringToChar(currentPath_);
-    QString hash = QString::fromUtf8(data, size);
-    char* ipfsPath = QStringToChar("/ipfs/" + hash);
-    ipfs_files_cp(ipfsPath, curDir, (void*)&IPFSApi::callback);
+    QByteArray ba = QByteArray::fromRawData(data, size);
+    QJsonParseError e;
+    QJsonDocument doc = QJsonDocument::fromJson(ba, &e);
+    QJsonObject obj = doc.object();
+
+    QFileInfo path = QFileInfo(obj.value("Path").toString());
+    QString dest;
+
+    if (path.isDir()) {
+        dest = currentPath_ + path.absoluteDir().dirName();
+    } else {
+        dest = currentPath_ + path.fileName();
+    }
+
+    addingFiles_ = false;
+    emit isAddingFilesChanged();
+
+    char* ipfsPath = QStringToChar("/ipfs/" + obj.value("Cid").toString());
+    char* destPath = QStringToChar(dest);
+
+    ipfs_files_cp(ipfsPath, destPath, (void*)&IPFSApi::callback);
 }
 
 void IPFSApi::handleFilesCp(char *data, size_t size)
 {
     files_ls();
+}
+
+void IPFSApi::handleGc(char *data, size_t size)
+{
+    gcRunning_ = false;
+    emit gcChanged();
 }

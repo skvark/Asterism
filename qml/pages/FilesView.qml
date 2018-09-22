@@ -32,13 +32,13 @@ Item {
         PullDownMenu {
             id: menu
             MenuItem {
-                text: "Add File to IPFS"
+                text: "Add File Here"
                 onClicked: {
                     pageStack.push(contentPickerPage)
                 }
             }
             MenuItem {
-                text: "Create Directory"
+                text: "Create Directory Here"
                 onClicked: {
                     var dialog = pageStack.push(Qt.resolvedUrl("CreateDir.qml"))
                     dialog.accepted.connect(function() {
@@ -113,18 +113,20 @@ Item {
                  anchors.right: parent.right
 
                  Image {
-                     verticalAlignment: parent.verticalCenter
-                     id: foldericon
+                     id: icon
                      anchors.left: parent.left
                      anchors.leftMargin: Theme.paddingLarge
-                     source: "image://theme/icon-m-folder"
-                     visible: model.modelData.Type === 1
+                     source: model.modelData.Type === 1
+                             ? "image://theme/icon-m-folder"
+                             : "image://theme/icon-m-note"
                  }
+
+
 
                  Label {
                      id: namelabel
                      anchors {
-                         left: model.modelData.Type === 1 ? foldericon.right : parent.left
+                         left: icon.right
                          right: parent.right
                          leftMargin: Theme.paddingLarge
                          rightMargin: Theme.paddingLarge
@@ -132,26 +134,31 @@ Item {
                      }
                      textFormat: Text.RichText
                      text: model.modelData.Name
+                     truncationMode: TruncationMode.Fade
                  }
 
                  Label {
                      id: sizelabel
                      anchors {
-                         left: model.modelData.Type === 1 ? foldericon.right : parent.left
+                         left: icon.right
                          right: parent.right
                          top: namelabel.bottom
                          leftMargin: Theme.paddingLarge
                          rightMargin: Theme.paddingLarge
                      }
 
-                     font.pixelSize: 18
+                     font.pixelSize: 19
                      textFormat: Text.RichText
-                     text: model.modelData.Hash + ", " + model.modelData.Size / 1000 + " kB"
+                     text: model.modelData.Type === 0
+                           ? model.modelData.Hash + ", " + model.modelData.Size / 1000 + " kB"
+                           : model.modelData.Hash
                      color: Theme.rgba(Theme.secondaryColor, 0.5)
                  }
 
                  onClicked: {
-                     ipfsapi.setCurrentPath(model.modelData.Name)
+                     if (model.modelData.Type === 1) {
+                        ipfsapi.setCurrentPath(model.modelData.Name)
+                     }
                  }
              }
 

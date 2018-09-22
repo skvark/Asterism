@@ -12,19 +12,23 @@ Page {
         PullDownMenu {
             width: parent.width
             visible: viewContainer.currentIndex === 0
+            busy: ipfsapi.isStarting
 
             MenuItem {
                 text: "About"
                 onClicked: pageStack.push("About.qml");
             }
+
             MenuItem {
-                text: "Settings"
-                onClicked: pageStack.push("Settings.qml");
+                text: ipfsapi.isRunning ? "Stop Node" : "Start Node"
+                onClicked: ipfsapi.isRunning ? ipfsapi.stop() : ipfsapi.start()
+                enabled: !ipfsapi.isStarting
             }
         }
 
         SlideshowView {
             id: viewContainer
+            width: parent.width
             itemWidth: width
             itemHeight: height
             height: page.height - navigation.height
@@ -34,7 +38,7 @@ Page {
             anchors {
                 top: parent.top;
                 left: parent.left;
-                right: parent.right
+                right: parent.right;
             }
 
             model: VisualItemModel {
@@ -42,13 +46,19 @@ Page {
                 InfoView { id: infoView }
                 FilesView { id: filesView }
                 PeersView { id: peersView }
+                SettingsView { id: settingsView }
             }
 
             onCurrentIndexChanged: {
                 navigation.selected = currentIndex
-                if (currentIndex === 1) {
+                if (currentIndex === 0 || currentIndex === 3) {
+                    ipfsapi.repoconfig();
+                    ipfsapi.repostats();
+                } else if (currentIndex === 1) {
                     ipfsapi.setCurrentPath("/");
                     ipfsapi.files_ls()
+                } else {
+                    ipfsapi.conns();
                 }
             }
         }
@@ -63,7 +73,10 @@ Page {
     Connections {
         target: ipfsapi
         onFirstUse: {
-            pageStack.push("WarningDialog.qml");
+            var dialog = pageStack.push("WarningDialog.qml");
+            dialog.accepted.connect(function() {
+                ipfsapi.start();
+            })
         }
     }
 }

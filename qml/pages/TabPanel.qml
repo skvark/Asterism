@@ -6,7 +6,7 @@ Rectangle {
     height: Theme.itemSizeSmall + Theme.itemSizeSmall / 12
     width: parent.width
     color: Theme.rgba(Theme.highlightDimmerColor, Theme.highlightBackgroundOpacity)
-    property int tabCount: 3;
+    property int tabCount: 4;
     property int selected: 0;
 
     Row {
@@ -66,6 +66,26 @@ Rectangle {
                 anchors.horizontalCenter:  parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
                 source: "image://theme/icon-m-share?" + (pressed
+                        ? Theme.highlightColor
+                        : Theme.primaryColor)
+                rotation: 300
+            }
+        }
+
+        BackgroundItem {
+            id: settings
+            width: parent.width / tabCount
+            height: parent.height
+            onClicked: { selected = 3 }
+
+            Indicator {
+                state: selected === 3 ? "visible" : "hidden"
+            }
+
+            Image {
+                anchors.horizontalCenter:  parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                source: "image://theme/icon-m-developer-mode?" + (pressed
                         ? Theme.highlightColor
                         : Theme.primaryColor)
                 rotation: 300
