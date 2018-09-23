@@ -57,10 +57,10 @@ Item {
                 onClicked: {
                     if (!checked) {
                         checked = true;
-                        ipfsapi.setMode("dht");
+                        ipfsapi.mode = "dht";
                     } else {
                         checked = false;
-                        ipfsapi.setMode("dhtclient")
+                        ipfsapi.mode = "dhtclient";
                     }
                 }
             }

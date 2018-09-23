@@ -184,6 +184,7 @@ signals:
 
 private:
     char *QStringToChar(QString str);
+    char checkNullData(char* data, QString caller);
 
     void handleStats(char* data, size_t size);
     void handleConfig(char* data, size_t size);
@@ -199,9 +200,10 @@ private:
     bool running_;
     bool starting_;
     bool listingFiles_;
+    bool listingConns_;
     bool addingFiles_;
     int maxRepoSize_;
-    bool dhtClientOnly_;
+    QString maxRepoSizeString_;
     bool gcRunning_;
 
     QString mode_;

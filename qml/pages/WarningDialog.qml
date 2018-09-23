@@ -10,10 +10,6 @@ Dialog {
 
     backNavigation: false
 
-    Component.onCompleted: {
-        ipfsapi.repoSize = 256
-    }
-
     Column {
         id: infolabel
         width: parent.width - (2 * Theme.pageStackIndicatorWidth)

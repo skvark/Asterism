@@ -5,6 +5,15 @@ Item {
     id: peersPage
     height: parent.height
     width: parent.width
+    property bool autoUpdate: false;
+
+    Timer {
+        interval: 2000
+        running: autoUpdate
+        repeat: true
+        onTriggered: ipfsapi.conns()
+    }
+
 
     SilicaFlickable {
         id: flickable
@@ -13,7 +22,12 @@ Item {
         width: parent.width
 
         PullDownMenu {
-
+            MenuItem {
+                text: "Set Auto Refresh " + (autoUpdate ? "Off" : "On")
+                onClicked: {
+                    autoUpdate = !autoUpdate
+                }
+            }
         }
 
         PageHeader {

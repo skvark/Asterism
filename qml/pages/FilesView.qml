@@ -147,7 +147,7 @@ Item {
                          rightMargin: Theme.paddingLarge
                      }
 
-                     font.pixelSize: 19
+                     font.pixelSize: Screen.Small ? 19 : 22
                      textFormat: Text.RichText
                      text: model.modelData.Type === 0
                            ? model.modelData.Hash + ", " + model.modelData.Size / 1000 + " kB"

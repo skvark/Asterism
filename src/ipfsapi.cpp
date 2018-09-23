@@ -10,13 +10,14 @@ IPFSApi::IPFSApi(QObject *parent) :
 {
     QString repoRoot = QStandardPaths::writableLocation(QStandardPaths::DataLocation) + "/ipfs";
 
+    setMaxRepoSize(0);
     repoPath_ = repoRoot;
     running_ = false;
     starting_ = false;
     listingFiles_ = false;
-    maxRepoSize_ = 0;
     currentPath_ = "/";
     addingFiles_ = false;
+    listingConns_ = false;
     gcRunning_ = false;
     mode_ = "";
     fileMap_.insert("/", QVariantList());
@@ -25,7 +26,8 @@ IPFSApi::IPFSApi(QObject *parent) :
 
     QDir dir(repoRoot);
     if (!dir.exists()) {
-        dir.mkpath(".");
+        setMaxRepoSize(512);
+        dir.mkpath(repoPath_);
         QTimer::singleShot(50, this, SIGNAL(firstUse()));
     } else {
         start();
@@ -43,16 +45,29 @@ void IPFSApi::start()
     starting_ = true;
     emit startingChanged();
 
-    QString size;
-    if (maxRepoSize_ == 0) {
-        size = "";
-    } else {
-        size = QString::number(maxRepoSize_) + QString("MB");
+    QByteArray ba1;
+    QByteArray ba2;
+    char* size = NULL;
+    char* mode = NULL;
+
+    if (maxRepoSize_ != 0) {
+        ba1 = maxRepoSizeString_.toLocal8Bit();
+        size = ba1.data();
     }
 
-    qDebug() << size;
-    qDebug() << mode_;
-    ipfs_start(QStringToChar(repoPath_), QStringToChar(size), QStringToChar(mode_), (void*)&IPFSApi::callback);
+    if (mode_ != "") {
+        ba2 = mode_.toLocal8Bit();
+        mode = ba2.data();
+    }
+
+    qDebug() << size << mode;
+
+    ipfs_start(
+        QStringToChar(repoPath_),
+        size,
+        mode,
+        (void*)&IPFSApi::callback
+    );
 }
 
 void IPFSApi::restart()
@@ -134,9 +149,10 @@ void IPFSApi::unpin(QString cid)
 
 void IPFSApi::conns()
 {
-    if (!running_) {
+    if (!running_ || listingConns_) {
         return;
     }
+    listingConns_ = true;
     qDebug() << QString("IPFS conns");
     ipfs_peers((void*)&IPFSApi::callback);
 }
@@ -184,7 +200,7 @@ void IPFSApi::repoconfig()
 
 void IPFSApi::files_ls()
 {
-    if (!running_) {
+    if (!running_ || listingFiles_) {
         return;
     }
 
@@ -242,6 +258,11 @@ bool IPFSApi::isGcRunning()
 void IPFSApi::setMaxRepoSize(int size)
 {
     maxRepoSize_ = size;
+    if (size == 0) {
+        maxRepoSizeString_ = "";
+    } else {
+        maxRepoSizeString_ = QString(QString::number(size) + QString("MB"));
+    }
 }
 
 int IPFSApi::maxRepoSize()
@@ -309,12 +330,20 @@ void IPFSApi::startSlot()
 
 char *IPFSApi::QStringToChar(QString str)
 {
-    QByteArray ba = str.toUtf8();
+    if (str.isEmpty()) {
+        return NULL;
+    }
+    QByteArray ba = str.toLocal8Bit();
     return ba.data();
 }
 
 void IPFSApi::handleStats(char *data, size_t size)
 {
+    if (data == NULL) {
+        qDebug() << "null data received";
+        return;
+    }
+
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument stats = QJsonDocument::fromJson(ba, &e);
@@ -326,7 +355,7 @@ void IPFSApi::handleStats(char *data, size_t size)
     bool ok;
     int intSize = repoMax.toInt(&ok);
     if(ok) {
-        maxRepoSize_ = intSize / (1000 * 1000);
+        setMaxRepoSize(intSize / (1000 * 1000));
         emit repoSizeChanged();
     }
 
@@ -335,6 +364,11 @@ void IPFSApi::handleStats(char *data, size_t size)
 
 void IPFSApi::handleConfig(char *data, size_t size)
 {
+    if (data == NULL) {
+        qDebug() << "null data received";
+        return;
+    }
+
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument config = QJsonDocument::fromJson(ba, &e);
@@ -351,12 +385,20 @@ void IPFSApi::handleConfig(char *data, size_t size)
 
 void IPFSApi::handleConns(char *data, size_t size)
 {
+    if (data == NULL) {
+        qDebug() << "null data received";
+        return;
+    }
+
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument conns = QJsonDocument::fromJson(ba, &e);
     QJsonArray arr = conns.array();
+
     connList_ = arr.toVariantList();
     emit connsChanged();
+
+    listingConns_ = false;
 }
 
 void IPFSApi::handleStart()
@@ -379,13 +421,19 @@ void IPFSApi::handleStartFail()
 
 void IPFSApi::handleFilesLs(char* data, size_t size)
 {
+    if (data == NULL) {
+        qDebug() << "null data received";
+        return;
+    }
+
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument files = QJsonDocument::fromJson(ba, &e);
     QJsonArray farr = files.array();
+
     fileMap_[currentPath_] = farr.toVariantList();
-    qDebug() << fileMap_[currentPath_];
     listingFiles_ = false;
+
     emit isListingFilesChanged();
     emit filesChanged();
 }
@@ -397,6 +445,11 @@ void IPFSApi::handleFilesMkdir(char *data, size_t size)
 
 void IPFSApi::handleAdd(char *data, size_t size)
 {
+    if (data == NULL) {
+        qDebug() << "null data received";
+        return;
+    }
+
     QByteArray ba = QByteArray::fromRawData(data, size);
     QJsonParseError e;
     QJsonDocument doc = QJsonDocument::fromJson(ba, &e);
