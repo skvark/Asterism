@@ -1,4 +1,8 @@
 #include <QGuiApplication>
+#include <QQmlContext>
+#include <QQuickView>
+#include <QGuiApplication>
+#include <QCoreApplication>
 #include <sailfishapp.h>
 #include <signal.h>
 #include <ipfsapi.h>
